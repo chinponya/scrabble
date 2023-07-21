@@ -28,8 +28,8 @@ defmodule Scrabble.Scoring do
     "6z" => {"g", 2},
     "7z" => {"r", 1}
   }
-  @letters for {_tile, {letter, _value}} <- @tile_to_letter, uniq: true, do: letter
   @stop_letter {"-", 0}
+  @alphabet Enum.map(?a..?z, &to_string([&1]))
   @row_width 6
   @column_height 3
 
@@ -74,10 +74,10 @@ defmodule Scrabble.Scoring do
       words = find_words(letters)
 
       for word <- words do
-        {_found_word, is_valid?} = valid_word?(word)
+        {_found_word, found_letters, is_valid?} = valid_word?(word)
 
         if is_valid? do
-          {scored_word, score} = letters_to_score(word)
+          {scored_word, score} = letters_to_score(found_letters)
           {scored_word, score + bonus}
         end
       end
@@ -151,26 +151,33 @@ defmodule Scrabble.Scoring do
 
     wildcards =
       if wildcard_at_edge do
-        @letters ++ [nil]
+        @alphabet ++ [nil]
       else
-        @letters
+        @alphabet
       end
 
     permutations =
       for wildcard <- wildcards do
-        letters_to_word(letters, wildcard)
+        {letters_to_word(letters, wildcard), letters}
       end
+
+    partial_words =
+      letters
+      |> Enum.chunk_by(fn {letter, _value} -> letter == "?" end)
+      |> Enum.map(fn letters -> {letters_to_word(letters, nil), letters} end)
+
+    permutations = Enum.concat(permutations, partial_words)
 
     words_in_dictionary =
-      for word <- permutations do
-        {word, MapSet.member?(@dictionary, word)}
+      for {word, letters} <- permutations do
+        {word, letters, MapSet.member?(@dictionary, word)}
       end
 
-    {found_word, exists?} =
-      Enum.find(words_in_dictionary, {nil, false}, fn {_word, exists?} -> exists? end)
+    {found_word, found_letters, exists?} =
+      Enum.find(words_in_dictionary, {nil, nil, false}, fn {_word, _letters, exists?} -> exists? end)
 
     is_valid = exists? and word_length > 2 and wildcard_count <= 1
-    {found_word, is_valid}
+    {found_word, found_letters, is_valid}
   end
 
   defp letters_to_score(letters) do
