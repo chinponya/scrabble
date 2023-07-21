@@ -8,8 +8,8 @@ defmodule Scrabble do
     :score,
     :scrabble_total,
     :words,
-    :discards,
     :letters,
+    :discards,
     :exhaustive_draw_count,
     :exhaustive,
     :ronned
