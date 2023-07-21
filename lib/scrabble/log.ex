@@ -21,7 +21,7 @@ defmodule Scrabble.State do
       %{
         nickname: account.nickname,
         seat: account.seat,
-        score: round(player_result.total_point / 1000),
+        score: Float.round(player_result.total_point / 1000, 1),
         points: player_result.part_point_1,
         discards: [],
         ronned: false,

@@ -15,6 +15,82 @@ defmodule Scrabble do
     :ronned
   ]
 
+  def summarize(rows) do
+    Enum.reduce(rows, %{}, fn row, acc ->
+      game_default = %{
+        end_time: row.end_time,
+        points: row.points,
+        score: row.score,
+        bonus: row.scrabble_total
+      }
+
+      default = %{
+        row.game_uuid => game_default
+      }
+
+      Map.update(acc, row.nickname, default, fn result ->
+        Map.update(result, row.game_uuid, game_default, fn game_result ->
+          Map.update(game_result, :bonus, 0, fn bonus -> bonus + row.scrabble_total end)
+        end)
+      end)
+    end)
+  end
+
+  def flatten_summary(summary) do
+    summary
+    |> Enum.to_list()
+    |> Enum.sort_by(fn {nickname, _} -> String.downcase(nickname) end)
+    |> Enum.map(fn {nickname, value} ->
+      value
+      |> Enum.sort_by(fn {_game_id, result} -> result.end_time end)
+      |> Enum.with_index(1)
+      |> Enum.flat_map(fn {{_game_id, result}, index} ->
+        [{"#{index} game", result.score}, {"#{index} bonus", result.bonus}]
+      end)
+      |> Map.new()
+      |> Map.put("player", nickname)
+    end)
+  end
+
+  def contest_summary_to_csv_file(contest_id, destination) do
+    header =
+      Enum.flat_map(1..10, fn index ->
+        ["#{index} game", "#{index} bonus"]
+      end)
+
+    headers = ["player" | header]
+
+    file = File.open!(destination, [:write, :utf8])
+
+    contest_id
+    |> contest_to_rows()
+    |> summarize()
+    |> flatten_summary()
+    |> CSV.encode(headers: headers)
+    |> Enum.each(&IO.write(file, &1))
+  end
+
+  def contest_to_csv_file(contest_id, destination) do
+    file = File.open!(destination, [:write, :utf8])
+
+    contest_id
+    |> contest_to_rows()
+    |> CSV.encode(headers: @headers)
+    |> Enum.each(&IO.write(file, &1))
+  end
+
+  def contest_to_rows(contest_id) do
+    majsoul_contest_id =
+      case Scrabble.Client.fetch_contest_id_by_share_code(contest_id) do
+        {:ok, result} -> result
+        {:error, error_code} -> raise "could not fetch contest: #{error_code}"
+      end
+
+    majsoul_contest_id
+    |> Scrabble.Client.fetch_contest_game_ids()
+    |> Enum.flat_map(&game_to_rows/1)
+  end
+
   def game_to_csv_file(game_uuid, destination) do
     file = File.open!(destination, [:write, :utf8])
 
