@@ -8,6 +8,7 @@ defmodule Scrabble.Client do
   end
 
   def fetch_game(game_uuid) do
+    Logger.info("fetching game log #{game_uuid}")
     version = GenServer.call(__MODULE__, :version)
 
     response =

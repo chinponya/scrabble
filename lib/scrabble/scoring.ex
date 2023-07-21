@@ -36,18 +36,22 @@ defmodule Scrabble.Scoring do
   def score_game(state) do
     for {round, round_num} <- Enum.with_index(state) do
       exhaustive_draw_count = count_exhaustive_draws_until(state, round_num)
-      score_round(round, exhaustive_draw_count)
+
+      round
+      |> Enum.map(&Map.put(&1, :round, round_num))
+      |> Enum.map(&Map.put(&1, :exhaustive_draw_count, exhaustive_draw_count))
+      |> score_round()
     end
   end
 
-  defp score_round(round, exhaustive_draw_count) do
+  defp score_round(round) do
     for player <- round do
       letters = discards_to_letters(player.discards)
       groups = letters_to_groups(letters)
       words = score_groups(groups)
 
       scrabble_total =
-        if exhaustive_draw_count > 2 do
+        if player.exhaustive_draw_count > 2 do
           0
         else
           words |> Enum.map(fn {_word, score} -> score end) |> Enum.sum()
@@ -191,7 +195,7 @@ defmodule Scrabble.Scoring do
     {word, total}
   end
 
-  defp letters_to_word(letters, wildcard \\ nil) do
+  defp letters_to_word(letters, wildcard) do
     letters
     |> Enum.map(fn
       {"?", _value} -> wildcard

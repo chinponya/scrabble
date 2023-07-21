@@ -22,6 +22,7 @@ defmodule Scrabble.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:csv, "~> 3.0"},
       {:soulless, "~> 0.1"}
     ]
   end
