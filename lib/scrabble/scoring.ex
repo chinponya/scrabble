@@ -147,17 +147,9 @@ defmodule Scrabble.Scoring do
   defp valid_word?(letters) do
     word_length = Enum.count(letters)
     wildcard_count = Enum.count(letters, fn {letter, _value} -> letter == "?" end)
-    wildcard_at_edge = Enum.at(letters, 0) == @wildcard or Enum.at(letters, -1) == @wildcard
-
-    wildcards =
-      if wildcard_at_edge do
-        @alphabet ++ [nil]
-      else
-        @alphabet
-      end
 
     permutations =
-      for wildcard <- wildcards do
+      for wildcard <- @alphabet do
         {letters_to_word(letters, wildcard), letters}
       end
 
