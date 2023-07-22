@@ -29,7 +29,7 @@ defmodule Scrabble.Scoring do
     "7z" => {"r", 1}
   }
   @stop_letter {"-", 0}
-  @alphabet Enum.map(?a..?z, &to_string([&1]))
+  @alphabet Enum.map(?a..?z, fn x -> {to_string([x]), 0} end)
   @row_width 6
   @column_height 3
 
@@ -81,19 +81,15 @@ defmodule Scrabble.Scoring do
 
   defp score_groups(groups) do
     groups
-    |> Enum.flat_map(fn {letters, bonus} ->
-      words = find_words(letters)
+    |> Enum.map(fn {group, bonus} ->
+      letters = find_valid_word(group)
 
-      for word <- words do
-        {_found_word, found_letters, is_valid?} = valid_word?(word)
-
-        if is_valid? do
-          {scored_word, score} = letters_to_score(found_letters)
-          {scored_word, score + bonus}
-        end
+      if !is_nil(letters) do
+        {word, score} = letters_to_score(letters)
+        {word, score + bonus}
       end
-      |> Enum.reject(&is_nil/1)
     end)
+    |> Enum.reject(&is_nil/1)
   end
 
   defp count_exhaustive_draws_until(state, round_num) do
@@ -121,12 +117,30 @@ defmodule Scrabble.Scoring do
   defp letters_to_groups(letters) do
     rows =
       for idx <- 0..2 do
-        {row_from_discards(letters, idx), 0}
+        row = row_from_discards(letters, idx)
+
+        row =
+          if Enum.count(row) == @row_width do
+            row ++ [@stop_letter]
+          else
+            row
+          end
+
+        {row, 0}
       end
 
     columns =
       for idx <- 0..5 do
-        {column_from_discards(letters, idx), idx + 1}
+        column = column_from_discards(letters, idx)
+
+        column =
+          if Enum.count(column) == @column_height do
+            column ++ [@stop_letter]
+          else
+            column
+          end
+
+        {column, idx + 1}
       end
 
     Enum.concat(rows, columns)
@@ -149,40 +163,63 @@ defmodule Scrabble.Scoring do
     end)
   end
 
-  defp find_words(letters) do
+  def find_words(letters) do
     letters
-    |> Enum.chunk_by(&(&1 == @stop_letter))
-    |> Enum.reject(&match?([@stop_letter | _], &1))
+    |> Enum.reduce(
+      {[], []},
+      fn {letter, value}, {current, acc} ->
+        if letter == "-" do
+          {[], [current | acc]}
+        else
+          {current ++ [{letter, value}], acc}
+        end
+      end
+    )
+    |> then(&elem(&1, 1))
+    |> Enum.reverse()
+    |> Enum.reject(&Enum.empty?/1)
   end
 
-  defp valid_word?(letters) do
-    word_length = Enum.count(letters)
-    wildcard_count = Enum.count(letters, fn {letter, _value} -> letter == "?" end)
-
-    permutations =
-      for wildcard <- @alphabet do
-        {letters_to_word(letters, wildcard), letters}
-      end
-
-    partial_words =
+  def find_valid_word(letters) do
+    wildcard_incides =
       letters
-      |> Enum.chunk_by(fn {letter, _value} -> letter == "?" end)
-      |> Enum.map(fn letters -> {letters_to_word(letters, nil), letters} end)
+      |> Enum.with_index()
+      |> Enum.filter(fn {{letter, _value}, _index} -> letter == "?" end)
+      |> Enum.map(fn {_, index} -> index end)
 
-    permutations = Enum.concat(permutations, partial_words)
+    wildcard_incides = if Enum.empty?(wildcard_incides), do: [0], else: wildcard_incides
 
-    words_in_dictionary =
-      for {word, letters} <- permutations do
-        {word, letters, MapSet.member?(@dictionary, word)}
+    groups =
+      for wildcard_index <- wildcard_incides do
+        for {{letter, value}, index} <- Enum.with_index(letters) do
+          cond do
+            letter == "?" and Enum.count(wildcard_incides) == 1 ->
+              [@stop_letter | @alphabet]
+
+            letter == "?" and index == wildcard_index ->
+              @alphabet
+
+            letter == "?" ->
+              [@stop_letter]
+
+            true ->
+              [{letter, value}]
+          end
+        end
       end
 
-    {found_word, found_letters, exists?} =
-      Enum.find(words_in_dictionary, {nil, nil, false}, fn {_word, _letters, exists?} ->
-        exists?
+    permutations = Enum.flat_map(groups, &cartesian_product/1)
+    words = Enum.flat_map(permutations, &find_words/1)
+
+    valid_words =
+      Enum.filter(words, fn letters ->
+        word = letters_to_word(letters)
+        Enum.count(letters) > 2 and MapSet.member?(@dictionary, word)
       end)
 
-    is_valid = exists? and word_length > 2 and wildcard_count <= 1
-    {found_word, found_letters, is_valid}
+    valid_words
+    |> Enum.sort_by(&Enum.count/1, :desc)
+    |> Enum.at(0)
   end
 
   defp letters_to_score(letters) do
@@ -192,7 +229,7 @@ defmodule Scrabble.Scoring do
       |> Enum.map(fn {_letter, value} -> value end)
       |> Enum.sum()
 
-    has_wildcard = Enum.any?(letters, fn {letter, _value} -> letter == "?" end)
+    has_wildcard = Enum.any?(letters, fn {_letter, value} -> value < 1 end)
 
     multiplier =
       if has_wildcard do
@@ -203,17 +240,23 @@ defmodule Scrabble.Scoring do
       end
 
     total = ceil(base_value * multiplier)
-    word = letters_to_word(letters, "?")
+    word = letters_to_word(letters)
     {word, total}
   end
 
-  defp letters_to_word(letters, wildcard) do
+  defp letters_to_word(letters) do
     letters
-    |> Enum.map(fn
-      {"?", _value} -> wildcard
-      {letter, _value} -> letter
-    end)
-    |> Enum.reject(&is_nil/1)
+    |> Enum.map(fn {letter, _value} -> letter end)
     |> Enum.join()
+  end
+
+  defp cartesian_product(lists) do
+    for group <- lists, reduce: [[]] do
+      permutations ->
+        for element <- group, permutation <- permutations do
+          [element | permutation]
+        end
+    end
+    |> Enum.map(&Enum.reverse/1)
   end
 end
