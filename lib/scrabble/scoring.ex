@@ -62,7 +62,7 @@ defmodule Scrabble.Scoring do
       words = score_groups(groups)
 
       scrabble_total =
-        if player.exhaustive_draw_count > 2 or player.ronned do
+        if player.exhaustive_draw_count > 1 or player.ronned do
           0
         else
           words |> Enum.map(fn {_word, score} -> score end) |> Enum.sum()
