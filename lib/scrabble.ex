@@ -16,6 +16,29 @@ defmodule Scrabble do
     :exhaustive
   ]
 
+  def contest_word_stats_to_csv(contest_id, destination) do
+    file = File.open!(destination, [:write, :utf8])
+    headers = [:word, :value]
+
+    contest_id
+    |> contest_to_rows()
+    |> Enum.flat_map(fn row ->
+      words = String.split(row[:words], " ")
+
+      for word <- words, word != "" do
+        [word, value] =
+          word
+          |> String.replace(")", "")
+          |> String.split("(", parts: 2)
+
+        %{word: word, value: value}
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> CSV.encode(headers: headers)
+    |> Enum.each(&IO.write(file, &1))
+  end
+
   def summarize(rows) do
     Enum.reduce(rows, %{}, fn row, acc ->
       game_default = %{
@@ -39,7 +62,6 @@ defmodule Scrabble do
 
   def flatten_summary(summary) do
     summary
-    |> Enum.to_list()
     |> Enum.sort_by(fn {nickname, _} -> String.downcase(nickname) end)
     |> Enum.map(fn {nickname, value} ->
       value
