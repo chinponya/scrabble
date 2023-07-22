@@ -46,7 +46,18 @@ defmodule Scrabble.Scoring do
 
   defp score_round(round) do
     for player <- round do
-      letters = discards_to_letters(player.discards)
+      letters =
+        player.discards
+        |> discards_to_letters()
+        |> Enum.zip(player.discards)
+        |> Enum.map(fn {{letter, value}, tile} ->
+          if Scrabble.Tile.is_dora(tile, player.dora_indicators) and letter != "?" do
+            {letter, value * 2}
+          else
+            {letter, value}
+          end
+        end)
+
       groups = letters_to_groups(letters)
       words = score_groups(groups)
 
@@ -166,7 +177,9 @@ defmodule Scrabble.Scoring do
       end
 
     {found_word, found_letters, exists?} =
-      Enum.find(words_in_dictionary, {nil, nil, false}, fn {_word, _letters, exists?} -> exists? end)
+      Enum.find(words_in_dictionary, {nil, nil, false}, fn {_word, _letters, exists?} ->
+        exists?
+      end)
 
     is_valid = exists? and word_length > 2 and wildcard_count <= 1
     {found_word, found_letters, is_valid}

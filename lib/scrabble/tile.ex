@@ -21,8 +21,10 @@ defmodule Scrabble.Tile do
   end
 
   def is_dora(tile, indicators) do
+    tile = deaka(tile)
+
     Enum.any?(indicators, fn indicator ->
-      deaka(tile) == successor_tile(indicator)
+      tile == successor_tile(indicator)
     end)
   end
 end
