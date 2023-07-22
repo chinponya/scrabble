@@ -120,7 +120,7 @@ defmodule Scrabble.Scoring do
         row = row_from_discards(letters, idx)
 
         row =
-          if Enum.count(row) == @row_width do
+          if Enum.count(row) >= @row_width do
             row ++ [@stop_letter]
           else
             row
@@ -146,10 +146,12 @@ defmodule Scrabble.Scoring do
     Enum.concat(rows, columns)
   end
 
-  defp row_from_discards(enum, n) do
+  def row_from_discards(enum, n) do
+    to_take = if n == 2, do: 999, else: @row_width
+
     enum
     |> Enum.drop(@row_width * n)
-    |> Enum.take(@row_width)
+    |> Enum.take(to_take)
   end
 
   defp column_from_discards(enum, n) do

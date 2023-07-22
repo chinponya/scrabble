@@ -165,9 +165,11 @@ defmodule Scrabble do
   end
 
   defp format_discards(enum, joiner \\ "") do
-    enum
-    |> Enum.chunk_every(6)
-    |> Enum.map(&Enum.join(&1, joiner))
+    for idx <- 0..2 do
+      enum
+      |> Scrabble.Scoring.row_from_discards(idx)
+      |> Enum.join(joiner)
+    end
     |> Enum.join("\n")
   end
 end
