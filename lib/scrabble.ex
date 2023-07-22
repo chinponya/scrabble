@@ -10,9 +10,10 @@ defmodule Scrabble do
     :words,
     :letters,
     :discards,
+    :dora_indicators,
+    :ronned,
     :exhaustive_draw_count,
-    :exhaustive,
-    :ronned
+    :exhaustive
   ]
 
   def summarize(rows) do
@@ -120,6 +121,7 @@ defmodule Scrabble do
   defp format_round(round) do
     for player <- round do
       discards = format_discards(player.discards, " ")
+      dora_indicators = format_discards(player.dora_indicators, " ")
 
       letters =
         player.letters
@@ -134,6 +136,7 @@ defmodule Scrabble do
       player
       |> Map.drop([:groups, :seat])
       |> Map.put(:discards, discards)
+      |> Map.put(:dora_indicators, dora_indicators)
       |> Map.put(:letters, letters)
       |> Map.put(:words, words)
     end

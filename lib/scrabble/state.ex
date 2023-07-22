@@ -2,16 +2,21 @@ defmodule Scrabble.State do
   alias Soulless.Game.Lq
 
   def from_log(%Lq.RecordGame{} = game_head, game_events) do
-    state = initial_state_from_game_log(game_head)
+    game_events
+    |> Enum.reduce([], fn event, acc ->
+      case event do
+        %Lq.RecordNewRound{} ->
+          round = initial_state_from_game_log(game_head)
+          new_round = convert_event(event, round)
+          List.insert_at(acc, 0, new_round)
 
-    events_by_round =
-      game_events
-      |> Enum.chunk_by(&match?(%Lq.RecordNewRound{}, &1))
-      |> Enum.reject(&match?([%Lq.RecordNewRound{}], &1))
-
-    for events <- events_by_round do
-      Enum.reduce(events, state, &event_to_discards/2)
-    end
+        _ ->
+          [round | remaining] = acc
+          new_round = convert_event(event, round)
+          [new_round | remaining]
+      end
+    end)
+    |> Enum.reverse()
   end
 
   defp initial_state_from_game_log(%Lq.RecordGame{} = game_head) do
@@ -25,22 +30,42 @@ defmodule Scrabble.State do
         points: player_result.part_point_1,
         discards: [],
         ronned: false,
-        exhaustive: false
+        exhaustive: false,
+        dora_indicators: []
       }
     end
   end
 
-  defp event_to_discards(%Lq.RecordDiscardTile{} = event, state) do
-    add_discard(state, event.seat, event.tile)
+  defp convert_event(%Lq.RecordNewRound{} = event, state) do
+    add_doras(state, event.doras)
   end
 
-  defp event_to_discards(%Lq.RecordChiPengGang{} = event, state) do
+  defp convert_event(%Lq.RecordDiscardTile{} = event, state) do
+    new_state =
+      if !is_nil(event.doras) && !Enum.empty?(event.doras) do
+        add_doras(state, event.doras)
+      else
+        state
+      end
+
+    add_discard(new_state, event.seat, event.tile)
+  end
+
+  defp convert_event(%Lq.RecordDealTile{} = event, state) do
+    if !is_nil(event.doras) && !Enum.empty?(event.doras) do
+      add_doras(state, event.doras)
+    else
+      state
+    end
+  end
+
+  defp convert_event(%Lq.RecordChiPengGang{} = event, state) do
     tiles = Enum.zip(event.tiles, event.froms)
     {called_tile, target} = Enum.find(tiles, fn {_tile, from} -> from != event.seat end)
     remove_last_discard(state, target, called_tile)
   end
 
-  defp event_to_discards(%Lq.RecordHule{} = event, state) do
+  defp convert_event(%Lq.RecordHule{} = event, state) do
     first_win = Enum.at(event.hules, 0)
 
     if first_win.zimo do
@@ -52,13 +77,13 @@ defmodule Scrabble.State do
     end
   end
 
-  defp event_to_discards(%Lq.RecordNoTile{} = _event, state) do
+  defp convert_event(%Lq.RecordNoTile{} = _event, state) do
     for player <- state do
       %{player | exhaustive: true}
     end
   end
 
-  defp event_to_discards(_event, state) do
+  defp convert_event(_event, state) do
     state
   end
 
@@ -85,5 +110,11 @@ defmodule Scrabble.State do
 
       %{player | discards: List.delete_at(player.discards, -1)}
     end)
+  end
+
+  defp add_doras(state, doras) do
+    for player <- state do
+      %{player | dora_indicators: doras}
+    end
   end
 end
